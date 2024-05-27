@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Unlicense
 
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity ^0.8.0;
 
 import "../utils/ZgsSpec.sol";
 import "../utils/OnlySender.sol";
 import "../interfaces/IReward.sol";
 import "../interfaces/AddressBook.sol";
-
 import "./Reward.sol";
 
 abstract contract ChunkRewardBase is IReward, OnlySender {
@@ -19,40 +18,25 @@ abstract contract ChunkRewardBase is IReward, OnlySender {
         book = AddressBook(_book);
     }
 
-    function fillReward(uint256 beforeLength, uint256 chargedSectors)
-        external
-        payable
-    {
-        require(
-            _msgSender() == address(book.market()),
-            "Sender does not have permission"
-        );
+    function fillReward(uint256 beforeLength, uint256 chargedSectors) external payable {
+        require(_msgSender() == address(book.market()), "Sender does not have permission");
 
         uint256 totalSectors = chargedSectors;
-        uint256 feePerPricingChunk = (msg.value * SECTORS_PER_PRICE) /
-            totalSectors;
+        uint256 feePerPricingChunk = (msg.value * SECTORS_PER_PRICE) / totalSectors;
         uint256 afterLength = beforeLength + totalSectors;
 
-        uint256 firstPricingLength = SECTORS_PER_PRICE -
-            (beforeLength % SECTORS_PER_PRICE);
-        uint256 firstPricingIndex = (beforeLength + firstPricingLength) /
-            SECTORS_PER_PRICE -
-            1;
-
-        uint256 lastPricingLength = ((afterLength - 1) % SECTORS_PER_PRICE) + 1;
-        uint256 lastPricingIndex = (afterLength - lastPricingLength) /
-            SECTORS_PER_PRICE;
-
-        bool finalizeLastChunk = (afterLength ==
-            (lastPricingIndex + 1) * SECTORS_PER_PRICE);
+        uint256 firstPricingIndex = beforeLength / SECTORS_PER_PRICE;
+        uint256 lastPricingIndex = (afterLength - 1) / SECTORS_PER_PRICE;
+        uint256 lastPricingLength = afterLength % SECTORS_PER_PRICE;
+        bool finalizeLastChunk = lastPricingLength == 0;
 
         if (firstPricingIndex == lastPricingIndex) {
             rewards[firstPricingIndex].addReward(
-                (feePerPricingChunk * (afterLength - beforeLength)) /
-                    SECTORS_PER_PRICE,
+                (feePerPricingChunk * totalSectors) / SECTORS_PER_PRICE,
                 finalizeLastChunk
             );
         } else {
+            uint256 firstPricingLength = SECTORS_PER_PRICE - (beforeLength % SECTORS_PER_PRICE);
             rewards[firstPricingIndex].addReward(
                 (feePerPricingChunk * firstPricingLength) / SECTORS_PER_PRICE,
                 true
@@ -68,20 +52,14 @@ abstract contract ChunkRewardBase is IReward, OnlySender {
         }
     }
 
-    function claimMineReward(
-        uint256 pricingIndex,
-        address payable beneficiary,
-        bytes32
-    ) external {
+    function claimMineReward(uint256 pricingIndex, address payable beneficiary, bytes32) external {
         require(_msgSender() == book.mine(), "Sender does not have permission");
 
-        Reward memory reward = rewards[pricingIndex];
+        Reward storage reward = rewards[pricingIndex];
 
         uint256 releasedReward = _releasedReward(reward);
         reward.updateReward(releasedReward);
         uint256 rewardAmount = reward.claimReward();
-
-        rewards[pricingIndex] = reward;
 
         if (rewardAmount > 0) {
             beneficiary.transfer(rewardAmount);
@@ -89,8 +67,8 @@ abstract contract ChunkRewardBase is IReward, OnlySender {
         }
     }
 
-    function _releasedReward(Reward memory reward)
-        internal
-        virtual
-        returns (uint256);
+    function _releasedReward(Reward storage reward) internal virtual returns (uint256) {
+        // Add your logic here to calculate released reward
+        return 0;
+    }
 }
